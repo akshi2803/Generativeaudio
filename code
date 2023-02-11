@@ -1,0 +1,71 @@
+#conversion of mp3 to wav
+
+import pydub
+import os
+import gzip
+
+def convert_mp3_to_wav(data_dir):
+    for filename in os.listdir(data_dir):
+        if filename.endswith(".mp3") or filename.endswith(".gz"):
+            file_path = os.path.join(data_dir, filename)
+            if filename.endswith(".gz"):
+                with gzip.open(file_path, "rb") as f:
+                    contents = f.read()
+                # Extract the MP3 file from the .gz archive
+                mp3_file_path = os.path.splitext(file_path)[0]
+                with open(mp3_file_path, "wb") as f:
+                    f.write(contents)
+                sound = pydub.AudioSegment.from_mp3(mp3_file_path)
+                os.remove(mp3_file_path)
+            else:
+                sound = pydub.AudioSegment.from_mp3(file_path)
+            wav_file_path = os.path.splitext(file_path)[0] + ".wav"
+            sound.export(wav_file_path, format="wav")
+
+convert_mp3_to_wav("./dataset1.gz")
+
+#preprocessing
+
+import librosa
+import numpy as np
+import gzip
+import shutil
+import wave
+
+def preprocess_audio(file_path):
+    # Load the audio data
+    audio, sr = librosa.load(file_path, sr=16000)
+    
+    # Pre-emphasis
+    pre_emphasis = 0.97
+    audio = np.append(audio[0], audio[1:] - pre_emphasis * audio[:-1])
+    
+    # Resampling
+    audio = librosa.resample(audio, sr, 16000)
+    
+    # Normalization
+    audio = audio / np.abs(audio).max()
+    
+    # Windowing and feature extraction
+    frame_length = int(0.025 * 16000)
+    frame_step = int(0.01 * 16000)
+    audio_frames = librosa.util.frame(audio, frame_length=frame_length,
+                                      hop_length=frame_step).T
+    features = librosa.feature.mfcc(y=audio, sr=16000, n_mfcc=13)
+    
+    return features
+
+def convert_gz_to_wav(gz_file, wav_file):
+    # Uncompress the .gz file
+    with gzip.open(gz_file, 'rb') as f_in:
+        with open(wav_file, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+    
+    # Verify that the file is in WAV format
+    with wave.open(wav_file, 'r') as wav_file:
+        if wav_file.getnchannels() != 1:
+            print("Error: The WAV file must have a single channel.")
+        if wav_file.getsampwidth() != 2:
+            print("Error: The WAV file must have a sample width of 2 bytes.")
+        if wav_file.getframerate() != 16000:
+            print("Error: The WAV file must have a sample rate of 16000 Hz.")
